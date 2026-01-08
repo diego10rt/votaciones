@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Votación 13.1 (Ajuste Perfecto)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* --- ESTILOS GENERALES --- */
+        * { box-sizing: border-box; } 
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow: hidden; /* Evitar scrollbar doble */ }
+        
+        /* CONTENEDOR NORMAL (LOGIN/ADMIN) */
+        .contenedor { 
+            background: white; 
+            padding: 2rem; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15); 
+            width: 100%; 
+            max-width: 480px; 
+            text-align: center; 
+            position: relative; 
+            transition: all 0.3s;
+            max-height: 95vh; /* Evitar que se salga en pantallas chicas */
+            overflow-y: auto; /* Scroll interno si es necesario */
+        }
+        
+        /* MODO TV: AJUSTE PERFECTO CON MARGENES */
+        .contenedor.full-screen { 
+            position: fixed; /* Flotar sobre todo */
+            top: 20px;       /* Margen Superior (~1cm) */
+            bottom: 20px;    /* Margen Inferior */
+            left: 20px;      /* Margen Izquierdo */
+            right: 20px;     /* Margen Derecho */
+            
+            width: auto;     /* Auto-ajuste */
+            height: auto;    /* Auto-ajuste */
+            max-width: none; 
+            max-height: none;
+            
+            background: #111; 
+            color: white; 
+            display: flex; 
+            flex-direction: column; 
+            border-radius: 20px; /* Bordes redondeados elegantes */
+            padding: 20px;
+            overflow: hidden; /* Prohibido scroll global */
+            z-index: 9999;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8); /* Sombra de profundidad */
+        }
+        
+        h1, h2, h3 { color: #2c3e50; margin-bottom: 10px; }
+        .full-screen h1, .full-screen h2, .full-screen h3 { color: #fff; margin: 0; }
+        .subtitulo { color: #7f8c8d; font-size: 0.9em; margin-bottom: 25px;}
+        
+        /* Inputs & Buttons */
+        input[type="text"], input[type="password"], select { width: 100%; padding: 12px; margin: 10px 0; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px; transition: 0.3s; }
+        input:focus { border-color: #007bff; outline: none; }
+        button { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        button:hover { background-color: #0056b3; transform: translateY(-1px); }
+        
+        /* Tarjetas */
+        .candidato-card { border: 1px solid #eee; padding: 15px; margin: 15px 0; border-radius: 10px; display: flex; flex-direction: column; align-items: center; background: #fff; transition: all 0.2s ease; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .candidato-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .seleccionado { border: 3px solid #ffc107 !important; background-color: #fffbe6 !important; }
+        .candidato-foto { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; margin-bottom: 12px; border: 4px solid #007bff; }
+        .info-candidato { font-weight: bold; font-size: 1.2em; margin-bottom: 10px; color: #34495e; }
+        .btn-card-accion { background-color: #6c757d; width: auto; padding: 8px 25px; font-size: 14px; } 
+        .seleccionado .btn-card-accion { background-color: #ffc107; color: #000; font-weight: bold; }
+
+        /* Botones Especiales */
+        .btn-confirmar-final { background-color: #27ae60; margin-bottom: 20px; border-bottom: 4px solid #1e8449; animation: palpitar 2s infinite; }
+        .btn-confirmar-final:hover { background-color: #2ecc71; }
+        @keyframes palpitar { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+        .btn-blanco { background-color: #fff; color: #555; border: 2px solid #eee; margin-top: 20px; } 
+        .btn-nulo { background-color: #34495e; margin-top: 10px; } 
+        .btn-peligro { background-color: #c0392b; }
+        .btn-config { background-color: #8e44ad; }
+        .btn-eliminar { background-color: white; color: #c0392b; border: 1px solid #c0392b; width: 32px; height: 32px; padding: 0; border-radius: 4px; font-size: 16px; margin-left: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .btn-eliminar:hover { background-color: #c0392b; color: white; }
+        
+        /* Botones Dashboard */
+        .btn-viz { width: auto; display: inline-block; margin: 0 5px; padding: 8px 20px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 20px; font-size: 14px; }
+        .btn-viz:hover { background: rgba(255,255,255,0.3); }
+        .btn-viz.activo { background: #3498db; border-color: #3498db; }
+
+        .oculto { display: none !important; }
+        #admin-link { display: block; margin-top: 25px; font-size: 13px; color: #bdc3c7; text-decoration: none; transition: 0.3s; }
+        
+        /* --- ESTILOS DASHBOARD TV --- */
+        .header-tv {
+            flex: 0 0 auto; 
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 15px; border-bottom: 1px solid #333; margin-bottom: 15px;
+            height: 60px; /* Altura fija Header */
+        }
+
+        .dashboard-grid { 
+            display: flex; 
+            height: calc(100% - 75px); /* Resto de la altura exacta */
+            gap: 20px; 
+            overflow: hidden; 
+        }
+        
+        /* Gráfico (Izquierda) */
+        .chart-container { 
+            flex: 65; /* 65% Ancho */
+            background: rgba(30, 30, 30, 0.6); 
+            border-radius: 15px; 
+            padding: 15px; 
+            position: relative; 
+            border: 1px solid #333;
+            height: 100%; /* Llenar altura disponible */
+        }
+        
+        /* Lista (Derecha) */
+        .leaderboard-container { 
+            flex: 35; /* 35% Ancho */
+            background: rgba(30, 30, 30, 0.6); 
+            border-radius: 15px; 
+            padding: 15px; 
+            display: flex; flex-direction: column; 
+            border: 1px solid #333;
+            height: 100%; /* Llenar altura disponible */
+            overflow: hidden; 
+        }
+
+        .lista-scroll {
+            overflow-y: auto;
+            flex: 1; /* Estirar */
+            padding-right: 5px; 
+        }
+        
+        /* Scrollbar oscura */
+        .lista-scroll::-webkit-scrollbar { width: 6px; }
+        .lista-scroll::-webkit-scrollbar-track { background: #222; }
+        .lista-scroll::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        
+        .leader-card { 
+            background: rgba(255,255,255,0.05); margin: 6px 0; padding: 10px 15px; 
+            border-radius: 8px; display: flex; align-items: center; gap: 12px; 
+            border-left: 5px solid transparent; 
+        }
+        
+        .leader-foto { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 1px solid #555; }
+        .leader-info h3 { margin: 0; font-size: 1.1em; color: #ffffff; text-align: left; font-weight: 400; }
+        .leader-votes { font-size: 1.4em; font-weight: bold; color: white; margin-left: auto; }
+
+        /* Modales & Switch */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(3px); display: flex; justify-content: center; align-items: center; z-index: 10000; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+        .modal-overlay.activo { opacity: 1; visibility: visible; }
+        .modal-box { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; transform: scale(0.8); transition: all 0.3s ease; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .modal-overlay.activo .modal-box { transform: scale(1); }
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 20000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); border-left: 5px solid #2ecc71; transform: translateX(120%); transition: transform 0.4s ease; min-width: 250px; font-weight: 500; }
+        .toast.mostrar { transform: translateX(0); }
+        .toast.error { border-left-color: #e74c3c; }
+        .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #2ecc71; }
+        input:checked + .slider:before { transform: translateX(22px); }
+        .switch-container { display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 15px; margin: 15px 0; border-radius: 8px; border: 1px solid #e0e0e0; }
+    </style>
+</head>
+<body>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <div id="modal-login" class="modal-overlay">
+        <div class="modal-box">
+            <div style="font-size: 40px; margin-bottom: 10px;">🔐</div>
+            <h3 class="modal-titulo">Acceso Staff</h3>
+            <label style="display:block; text-align:left; margin-top:15px; font-size:0.9em; color:#666;">Usuario:</label>
+            <select id="login-usuario">
+                <option value="administrador">Administrador</option>
+                <option value="ayudante">Ayudante (Visualizador TV)</option>
+            </select>
+            <label style="display:block; text-align:left; font-size:0.9em; color:#666;">Contraseña:</label>
+            <input type="password" id="login-password" placeholder="••••••••">
+            <div style="display: flex; gap:10px; margin-top: 15px;">
+                <button style="background-color: #95a5a6;" onclick="cerrarModal('modal-login')">Cancelar</button>
+                <button onclick="verificarLogin()">Entrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-confirm" class="modal-overlay">
+        <div class="modal-box">
+            <div style="font-size: 40px; margin-bottom: 10px;">🤔</div>
+            <h3 id="modal-confirm-titulo">¿Confirmar?</h3>
+            <p id="modal-confirm-texto">Esta acción no se puede deshacer.</p>
+            <div style="display: flex; gap:10px;">
+                <button style="background-color: #95a5a6;" onclick="cerrarModal('modal-confirm')">Cancelar</button>
+                <button id="btn-modal-si" style="background-color: #27ae60;">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="contenedor-principal" class="contenedor">
+        
+        <div id="pantalla-login">
+            <h1 id="titulo-principal-display">Votación Oficial</h1>
+            <p class="subtitulo">Sistema de Elección Seguro</p>
+            <div style="margin: 30px 0;">
+                <p style="text-align: left; font-weight: bold; color: #555;">RUT / Identificación:</p>
+                <input type="text" id="input-id" placeholder="Ej: 11.222.333-K" maxlength="12" oninput="aplicarMascaraRUT(this)">
+            </div>
+            <button onclick="iniciarSesion()">Ingresar al Sistema</button>
+            <a href="#" id="admin-link" onclick="abrirModalLogin()">Acceso Staff</a>
+        </div>
+
+        <div id="pantalla-votacion" class="oculto">
+            <h2 id="titulo-votacion-display">Elige tu Opción</h2>
+            <p style="font-size: 14px; color:#666; margin-bottom: 15px;">Usa los botones para seleccionar o quitar.</p>
+            <button id="btn-confirmar-voto" class="btn-confirmar-final oculto" onclick="preConfirmarVoto()">✅ CONFIRMAR VOTACIÓN</button>
+            <div id="contenedor-candidatos-activos"></div>
+            <hr style="margin: 25px 0; border: 0; border-top: 1px solid #eee;">
+            <h3 style="font-size: 1em; color: #888;">Opciones Especiales</h3>
+            <button id="btn-esp-blanco" class="btn-blanco" onclick="seleccionarEspecial('VOTO EN BLANCO')">Votar en Blanco</button>
+            <button id="btn-esp-nulo" class="btn-nulo" onclick="seleccionarEspecial('VOTO NULO')">Votar Nulo (❌)</button>
+            <br><br>
+            <button onclick="cerrarSesion()" style="background-color: #95a5a6;">Cancelar y Salir</button>
+        </div>
+
+        <div id="pantalla-admin" class="oculto">
+            <h2>Panel de Administrador</h2>
+            <p class="subtitulo">Gestión Total</p>
+            <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; text-align: left; margin-bottom: 10px; border: 1px solid #eee;">
+                <label><b>1. Nombre Votación:</b></label>
+                <input type="text" id="input-nuevo-titulo" placeholder="Ej: Delegados">
+                <button class="btn-config" onclick="cambiarTituloVotacion()">Actualizar</button>
+            </div>
+            <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; text-align: left; margin-bottom: 10px; border: 1px solid #eee;">
+                <label><b>2. Base de Datos:</b></label>
+                <select id="selector-bd-candidatos"><option value="">-- Selecciona --</option></select>
+                <button onclick="agregarCandidatoDesdeBD()">+ Agregar</button>
+            </div>
+            <div style="margin-top: 15px; text-align: left; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+                <h3>3. Papeleta Activa</h3>
+                <div id="lista-admin-candidatos"></div>
+            </div>
+            <div class="switch-container">
+                <span style="font-weight:600;">4. Voto Múltiple</span>
+                <label class="switch"><input type="checkbox" id="check-voto-multiple" onchange="toggleModoMultiple()"><span class="slider round"></span></label>
+            </div>
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px dashed #e74c3c;">
+                <button class="btn-peligro" onclick="pedirConfirmacionBorrado()">🗑️ BORRAR TODO</button>
+            </div>
+            <button onclick="cerrarSesion()" style="background-color: #34495e; margin-top:20px">Salir</button>
+        </div>
+
+        <div id="pantalla-gracias" class="oculto">
+            <h1 style="color: #27ae60;">¡Voto Registrado!</h1>
+            <div style="font-size: 80px; margin: 20px 0;">✅</div>
+            <button onclick="cerrarSesion()">Volver al Inicio</button>
+        </div>
+
+        <div id="pantalla-ayudante" class="oculto" style="height: 100%;">
+            <div class="header-tv">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:15px; height:15px; background:red; border-radius:50%; animation: palpitar 1s infinite;"></div>
+                    <h2 style="margin:0; font-size: 1.5em; letter-spacing:1px;">EN VIVO</h2>
+                </div>
+                <div style="display: flex;">
+                    <button id="btn-bar" class="btn-viz activo" onclick="cambiarGraficoManual('bar')">📊 Barras</button>
+                    <button id="btn-pie" class="btn-viz" onclick="cambiarGraficoManual('doughnut')">🍩 Torta</button>
+                    <button class="btn-viz" onclick="cerrarSesion()" style="background: #c0392b; border-color:#c0392b; margin-left: 15px;">Salir</button>
+                </div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="chart-container">
+                    <canvas id="miGrafico"></canvas>
+                </div>
+                <div class="leaderboard-container">
+                    <h3 style="color:white; margin-bottom:15px; border-bottom:1px solid #555; width:100%; padding-bottom:10px;">Resultados</h3>
+                    <div id="lista-lideres" class="lista-scroll" style="width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        /* --- DATOS Y VARIABLES --- */
+        const baseDeDatosExcel = [
+            { id: 2, nombre: 'HERMENEGILDO  BARANDA MATUTE', foto: 'https://icbs.cl/files/fotos/foto_136.jpg' },
+            { id: 3, nombre: 'ALEJANDRO RAMON IGNACIO SALINAS RIPOLL', foto: 'https://icbs.cl/files/fotos/foto_140.jpg' },
+            { id: 4, nombre: 'JULIO  MONASTERIO CARRASCO', foto: 'https://icbs.cl/files/fotos/foto_184.jpg' },
+            { id: 5, nombre: 'MANUEL  FERREIRO MAGNAN', foto: 'https://icbs.cl/files/fotos/foto_200.jpg' },
+            { id: 6, nombre: 'GUILLERMO GABRIEL GANA GARCÍA', foto: 'https://icbs.cl/files/fotos/foto_212.jpg' },
+            { id: 7, nombre: 'ANDRÉS  CODINA FERNANDEZ', foto: 'https://icbs.cl/files/fotos/foto_229.jpg' },
+            { id: 8, nombre: 'JOSÉ ANTONIO PLUBINS ROMEO', foto: 'https://icbs.cl/files/fotos/foto_262.jpg' },
+            { id: 9, nombre: 'MARCELO ANDRÉS LAGOS LÓPEZ', foto: 'https://icbs.cl/files/fotos/foto_274.jpg' },
+            { id: 10, nombre: 'BELARMINO ANTONIO FIGUEROA COLLADO', foto: 'https://icbs.cl/files/fotos/foto_277.jpg' },
+            { id: 11, nombre: 'BORIS ALBERTO LIZAMA DÍAZ', foto: 'https://icbs.cl/files/fotos/foto_322.jpg' },
+            { id: 12, nombre: 'ANDRÉS FERNANDO SALINAS RIPOLL', foto: 'https://icbs.cl/files/fotos/foto_327.jpg' },
+            { id: 13, nombre: 'WASHINGTON  SCHMEISSER ARRIAGADA', foto: 'https://icbs.cl/files/fotos/foto_329.jpg' },
+            { id: 14, nombre: 'JOSÉ ALFREDO CALVO GIL', foto: 'https://icbs.cl/files/fotos/foto_396.jpg' },
+            { id: 15, nombre: 'ÓSCAR FERNANDO VARGAS GUAJARDO', foto: 'https://icbs.cl/files/fotos/foto_472.jpg' },
+            { id: 16, nombre: 'ANTONIO GUILLERMO CAPO VASQUEZ', foto: 'https://icbs.cl/files/fotos/foto_539.jpg' },
+            { id: 17, nombre: 'MAURICIO LEONARDO ARAYA IBARRA', foto: 'https://icbs.cl/files/fotos/foto_552.jpg' },
+            { id: 18, nombre: 'ROBERTO  RAGA GARCÍA', foto: 'https://icbs.cl/files/fotos/foto_572.jpg' },
+            { id: 19, nombre: 'MIGUEL ÁNGEL CÁRDENAS ROMEA', foto: 'https://icbs.cl/files/fotos/foto_586.jpg' },
+            { id: 20, nombre: 'JORGE MARIO GÓMEZ PÉREZ', foto: 'https://icbs.cl/files/fotos/foto_612.jpg' },
+            { id: 21, nombre: 'JOAQUÍN IVÁN MOYA PEÑALOZA', foto: 'https://icbs.cl/files/fotos/foto_627.jpg' },
+            { id: 22, nombre: 'ALFREDO EDUARDO PLANAS LIZAMA', foto: 'https://icbs.cl/files/fotos/foto_630.jpg' },
+            { id: 23, nombre: 'JOSE MIGUEL MARDONES URRUTIA', foto: 'https://icbs.cl/files/fotos/foto_668.jpg' },
+            { id: 24, nombre: 'CARLOS ALFREDO JARVIS CRISTI', foto: 'https://icbs.cl/files/fotos/foto_699.jpg' },
+            { id: 25, nombre: 'GABRIEL IVAN URIBE URIBE', foto: 'https://icbs.cl/files/fotos/foto_701.jpg' },
+            { id: 26, nombre: 'EUGENIO HUMBERTO CAMERATI CORRALES', foto: 'https://icbs.cl/files/fotos/foto_782.jpg' },
+            { id: 27, nombre: 'JUAN JOSÉ VALDES DEL RIO', foto: 'https://icbs.cl/files/fotos/foto_800.jpg' },
+            { id: 28, nombre: 'GILBERT GERALD DÍAZ EYZAGUIRRE', foto: 'https://icbs.cl/files/fotos/foto_834.jpg' },
+            { id: 29, nombre: 'JUAN CARLOS MARTÍNEZ VILLALBA', foto: 'https://icbs.cl/files/fotos/foto_862.jpg' },
+            { id: 30, nombre: 'BERNARDO ALEJANDRO BARRA GAVILÁN', foto: 'https://icbs.cl/files/fotos/foto_863.jpg' },
+            { id: 31, nombre: 'CLAUDIO ENRIQUE ARMIJO MARAMBIO', foto: 'https://icbs.cl/files/fotos/foto_881.jpg' },
+            { id: 32, nombre: 'JOSÉ LUIS ABARZÚA ROJAS', foto: 'https://icbs.cl/files/fotos/foto_883.jpg' },
+            { id: 33, nombre: 'CARLOS EDUARDO BINDIS ALVAREZ', foto: 'https://icbs.cl/files/fotos/foto_890.jpg' },
+            { id: 34, nombre: 'FREDDY ORLANDO TRONCOSO FAJARDO', foto: 'https://icbs.cl/files/fotos/foto_891.jpg' },
+            { id: 35, nombre: 'PABLO ANTONIO CAMPOS MUÑOZ', foto: 'https://icbs.cl/files/fotos/foto_895.jpg' },
+            { id: 36, nombre: 'JUAN CARLOS EMILIO IVANI RAMÍREZ', foto: 'https://icbs.cl/files/fotos/foto_932.jpg' },
+            { id: 37, nombre: 'JUAN FRANCISCO SOMALO VALOR', foto: 'https://icbs.cl/files/fotos/foto_956.jpg' },
+            { id: 38, nombre: 'PABLO IVAN CODINA GONZÁLEZ', foto: 'https://icbs.cl/files/fotos/foto_979.jpg' },
+            { id: 39, nombre: 'MIGUEL ÁNGEL MARCHESSE ROLLE', foto: 'https://icbs.cl/files/fotos/foto_1006.jpg' },
+            { id: 40, nombre: 'ANDRÉS ADALBERTO CAMPOS MUÑOZ', foto: 'https://icbs.cl/files/fotos/foto_1012.jpg' },
+            { id: 41, nombre: 'ÓSCAR JUAN AGÜERO VARGAS', foto: 'https://icbs.cl/files/fotos/foto_1023.jpg' },
+            { id: 42, nombre: 'JOSÉ ALFREDO ROJAS URIBE', foto: 'https://icbs.cl/files/fotos/foto_1028.jpg' },
+            { id: 43, nombre: 'RODRIGO ANDRÉS GUZMÁN AEDO', foto: 'https://icbs.cl/files/fotos/foto_1043.jpg' },
+            { id: 44, nombre: 'JAVIER ANDRÉS MARTINEZ HERMOSILLA', foto: 'https://icbs.cl/files/fotos/foto_1057.jpg' },
+            { id: 45, nombre: 'LEANDRO RAMÓN MADRID SALAZAR', foto: 'https://icbs.cl/files/fotos/foto_1073.jpg' },
+            { id: 46, nombre: 'GREGORIO ORLANDO MEDINA ORTEGA', foto: 'https://icbs.cl/files/fotos/foto_1123.jpg' },
+            { id: 47, nombre: 'JOSÉ MAURICIO MUÑOZ ÁLVAREZ', foto: 'https://icbs.cl/files/fotos/foto_1161.jpg' },
+            { id: 48, nombre: 'MIGUEL ANGEL SCHEID VILA', foto: 'https://icbs.cl/files/fotos/foto_1249.jpg' },
+            { id: 49, nombre: 'JAIME ANDRES MATUTE MENDOZA', foto: 'https://icbs.cl/files/fotos/foto_1271.jpg' },
+            { id: 50, nombre: 'JEAN PIERRE MÁRQUEZ SUZARTE', foto: 'https://icbs.cl/files/fotos/foto_1315.jpg' },
+            { id: 51, nombre: 'EDUARDO RAÚL BARRIOS CABRERA', foto: 'https://icbs.cl/files/fotos/foto_1317.jpg' },
+            { id: 52, nombre: 'DIEGO ALBERTO VELASQUEZ MEDRANO', foto: 'https://icbs.cl/files/fotos/foto_1344.jpg' },
+            { id: 53, nombre: 'DAVID ALEJANDRO OPAZO MENESES', foto: 'https://icbs.cl/files/fotos/foto_1383.jpg' },
+            { id: 54, nombre: 'JOSÉ MIGUEL CERDA MARDONES', foto: 'https://icbs.cl/files/fotos/foto_1394.jpg' },
+            { id: 55, nombre: 'ANDRÉS ALFONSO FIGUEROA CARMONA', foto: 'https://icbs.cl/files/fotos/foto_1410.jpg' },
+            { id: 56, nombre: 'DANIEL  ESTEBAN GANA JERALDO', foto: 'https://icbs.cl/files/fotos/foto_1444.jpg' },
+            { id: 57, nombre: 'JUAN MARCELO RIVEROS ORTIZ', foto: 'https://icbs.cl/files/fotos/foto_1449.jpg' },
+            { id: 58, nombre: 'JUAN JOSÉ NORAMBUENA CABEZAS', foto: 'https://icbs.cl/files/fotos/foto_1496.jpg' },
+            { id: 59, nombre: 'FELIPE ANDRÉS ESPINOZA PIZARRO', foto: 'https://icbs.cl/files/fotos/foto_1544.jpg' },
+            { id: 60, nombre: 'ENZO ALFONSO VESCOVI AVILA', foto: 'https://icbs.cl/files/fotos/foto_1566.jpg' },
+            { id: 61, nombre: 'JORGE FLORENTINO BÁEZ MAYEROVICH', foto: 'https://icbs.cl/files/fotos/foto_1597.jpg' },
+            { id: 62, nombre: 'JUAN JOSÉ FIGUEROA CARO', foto: 'https://icbs.cl/files/fotos/foto_1643.jpg' },
+            { id: 63, nombre: 'ALFREDO IGNACIO PLANAS SALINAS', foto: 'https://icbs.cl/files/fotos/foto_1654.jpg' },
+            { id: 64, nombre: 'MAURICIO ANDRÉS ORFALI MEJÍAS', foto: 'https://icbs.cl/files/fotos/foto_1712.jpg' },
+            { id: 65, nombre: 'DANIEL ANTONIO CRUZ LUCERO', foto: 'https://icbs.cl/files/fotos/foto_1855.jpg' },
+            { id: 66, nombre: 'NICOLÁS HÉCTOR  EDUARDO PERALTA SÁEZ', foto: 'https://icbs.cl/files/fotos/foto_1872.jpg' },
+            { id: 67, nombre: 'MARCIAL SEBASTIAN JARA VEGA', foto: 'https://icbs.cl/files/fotos/foto_1875.jpg' },
+            { id: 68, nombre: 'CÉSAR ADOLFO SALINAS MENESES', foto: 'https://icbs.cl/files/fotos/foto_1999.jpg' },
+            { id: 69, nombre: 'FELIPE IGNACIO AEDO ROJAS', foto: 'https://icbs.cl/files/fotos/foto_2005.jpg' },
+            { id: 70, nombre: 'FERNANDO  CALDERÓN VELOSO', foto: 'https://icbs.cl/files/fotos/foto_2035.jpg' },
+            { id: 71, nombre: 'CARLOS EDUARDO CORTES MARTÍNEZ', foto: 'https://icbs.cl/files/fotos/foto_2216.jpg' },
+            { id: 72, nombre: 'FRANCISCO XAVIER SALVADOR DE LAURENTIS', foto: 'https://icbs.cl/files/fotos/foto_2249.jpg' },
+            { id: 73, nombre: 'IÑIGO  DE PALACIO ESPAÑA', foto: 'https://icbs.cl/files/fotos/foto_2251.jpg' },
+            { id: 74, nombre: 'FELIPE ARMANDO ALVAREZ MOLINA', foto: 'https://icbs.cl/files/fotos/foto_2381.jpg' },
+            { id: 75, nombre: 'GONZALO IGNACIO TRONCOSO MONTUSCHI', foto: 'https://icbs.cl/files/fotos/foto_2398.jpg' },
+            { id: 76, nombre: 'JAIME FERNANDO HERNANDEZ OLMOS', foto: 'https://icbs.cl/files/fotos/foto_2427.jpg' },
+            { id: 77, nombre: 'LUCAS AGUSTIN COOPMAN SANCHEZ', foto: 'https://icbs.cl/files/fotos/foto_2537.jpg' },
+            { id: 78, nombre: 'RODRIGO IVÁN PARDO MUÑOZ', foto: 'https://icbs.cl/files/fotos/foto_2539.jpg' },
+            { id: 79, nombre: 'FRANCISCO JOSÉ MERIDA PADILLA', foto: 'https://icbs.cl/files/fotos/foto_2662.jpg' },
+            { id: 80, nombre: 'SIMON ENRIQUE PARRAGUEZ ALARCON', foto: 'https://icbs.cl/files/fotos/foto_2799.jpg' },
+            { id: 81, nombre: 'VÍCTOR  HUGO SEPÚLVEDA FERNÁNDEZ', foto: 'https://icbs.cl/files/fotos/foto_2873.jpg' },
+            { id: 82, nombre: 'JAVIER ANTONIO TRONCOSO TORRES', foto: 'https://icbs.cl/files/fotos/foto_2874.jpg' },
+            { id: 83, nombre: 'NICOLAS ANTONIO ESPINOSA GONZALEZ', foto: 'https://icbs.cl/files/fotos/foto_2876.jpg' },
+            { id: 84, nombre: 'JUAN ANTONIO CROVETTO SOTO', foto: 'https://icbs.cl/files/fotos/foto_3081.jpg' },
+            { id: 85, nombre: 'VALERIA ELIZABETH TRONCOSO TORRES', foto: 'https://icbs.cl/files/fotos/foto_3104.jpg' },
+            { id: 86, nombre: 'SEBASTIÁN ALEJANDRO UNDURRAGA GARCIA', foto: 'https://icbs.cl/files/fotos/foto_3228.jpg' },
+            { id: 87, nombre: 'EDEN ERNESTO TABOADA DÍAZ', foto: 'https://icbs.cl/files/fotos/foto_3229.jpg' },
+            { id: 88, nombre: 'EDMUNDO IGNACIO HENRÍQUEZ GONZALEZ', foto: 'https://icbs.cl/files/fotos/foto_3324.jpg' },
+            { id: 89, nombre: 'MARTIN ALONSO FIGUEROA ARCOS', foto: 'https://icbs.cl/files/fotos/foto_3437.jpg' },
+            { id: 90, nombre: 'MANUEL ANTONIO  CORREA SALAS', foto: 'https://icbs.cl/files/fotos/foto_3438.jpg' },
+            { id: 91, nombre: 'SEBASTIAN IGNACIO CERDA MATURANA', foto: 'https://icbs.cl/files/fotos/foto_3440.jpg' },
+            { id: 92, nombre: 'CRISTOBAL IGNACIO FARIAS RAMIREZ', foto: 'https://icbs.cl/files/fotos/foto_3441.jpg' },
+            { id: 93, nombre: 'JOSÉ  TOMÁS VALDÉS NúñEZ', foto: 'https://icbs.cl/files/fotos/foto_3451.jpg' },
+            { id: 94, nombre: 'DIEGO ALONSO RETAMAL AHUMADA', foto: 'https://icbs.cl/files/fotos/foto_3476.jpg' },
+            { id: 95, nombre: 'LUCIANO JAVIER SALES STUARDO', foto: 'https://icbs.cl/files/fotos/foto_3554.jpg' },
+            { id: 96, nombre: 'FELIPE ANDRÉS MUÑOZ RIQUELME', foto: 'https://icbs.cl/files/fotos/foto_3555.jpg' },
+            { id: 97, nombre: 'JOSÉ ANTONIO PASCUAL OBREGÓN', foto: 'https://icbs.cl/files/fotos/foto_3557.jpg' },
+            { id: 98, nombre: 'GONZALO ADRIÁN FLORES ROZAS', foto: 'https://icbs.cl/files/fotos/foto_3705.jpg' },
+            { id: 99, nombre: 'ORLANDO IGNACIO GANA LARA', foto: 'https://icbs.cl/files/fotos/foto_3761.jpg' },
+            { id: 100, nombre: 'JORDAN KEVIN WELLS MARTÍNEZ', foto: 'https://icbs.cl/files/fotos/foto_3762.jpg' },
+            { id: 101, nombre: 'SOFÍA CAROLINA JARA CATALÁN', foto: 'https://icbs.cl/files/fotos/foto_3763.jpg' },
+            { id: 102, nombre: 'PABLO IGNACIO BASSO MUÑOZ', foto: 'https://icbs.cl/files/fotos/foto_3944.jpg' },
+            { id: 103, nombre: 'PALOMA FÁTIMA BASILIO VERASTEGUI', foto: 'https://icbs.cl/files/fotos/foto_3945.jpg' },
+            { id: 104, nombre: 'NICOLÁS ALEJANDRO LEÓN MARTÍNEZ', foto: 'https://icbs.cl/files/fotos/foto_3947.jpg' },
+            { id: 105, nombre: 'BENJAMÍN GERMÁN TORRES OLMEDO', foto: 'https://icbs.cl/files/fotos/foto_3948.jpg' },
+            { id: 106, nombre: 'PATRICIO ALFREDO VEGA ZAMORANO', foto: 'https://icbs.cl/files/fotos/foto_3949.jpg' },
+        ];
+
+        let candidatosActivos = []; 
+        let votos = { "VOTO EN BLANCO": 0, "VOTO NULO": 0 }; 
+        let tituloVotacion = "Votación Oficial"; 
+        let esVotoMultiple = false; 
+        let seleccionTemporal = []; 
+        let chartInstance = null; 
+        let intervaloRefresco = null; 
+        let tipoGraficoActual = 'bar'; 
+
+        // 20 Colores Únicos para los candidatos
+        const coloresGraph = [
+            '#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e', '#d35400', '#7f8c8d',
+            '#c0392b', '#27ae60', '#f39c12', '#8e44ad', '#16a085', '#2c3e50', '#d35400', '#bdc3c7', '#7f8c8d', '#FF6384'
+        ];
+
+        /* --- INICIO --- */
+        window.onload = function() {
+            cargarSelectorAdmin();
+            reiniciarVotos(); 
+        };
+
+        function reiniciarVotos() { votos = { "VOTO EN BLANCO": 0, "VOTO NULO": 0 }; }
+
+        function cargarSelectorAdmin() {
+            const selector = document.getElementById('selector-bd-candidatos');
+            baseDeDatosExcel.forEach(c => {
+                let opcion = document.createElement('option');
+                opcion.value = c.id;
+                opcion.text = c.nombre;
+                selector.appendChild(opcion);
+            });
+        }
+
+        /* --- LOGICA LOGIN --- */
+        function verificarLogin() {
+            const usuario = document.getElementById('login-usuario').value;
+            const pass = document.getElementById('login-password').value;
+
+            if (pass === "admin123") {
+                cerrarModal('modal-login');
+                if (usuario === "administrador") {
+                    cambiarPantalla('pantalla-admin');
+                    notificar("Modo Administrador");
+                } else if (usuario === "ayudante") {
+                    cambiarPantalla('pantalla-ayudante');
+                    // Activar modo pantalla completa CSS
+                    document.getElementById('contenedor-principal').classList.add('full-screen');
+                    
+                    // Asegurar que el body no tenga scroll
+                    document.body.style.overflow = "hidden";
+
+                    actualizarDashboardVisual();
+                    notificar("Modo TV Activo");
+                    
+                    if(intervaloRefresco) clearInterval(intervaloRefresco);
+                    intervaloRefresco = setInterval(actualizarDashboardVisual, 3000);
+                }
+            } else {
+                notificar("Contraseña incorrecta", "error");
+            }
+        }
+
+        /* --- DASHBOARD AYUDANTE --- */
+        function actualizarDashboardVisual() {
+            let etiquetas = [];
+            let datos = [];
+            let backgroundColors = [];
+            let borderColors = [];
+            
+            // Asignar colores por índice
+            candidatosActivos.forEach((c, index) => {
+                etiquetas.push(c.nombre);
+                datos.push(votos[c.nombre] || 0); 
+                // Color cíclico de la paleta
+                backgroundColors.push(coloresGraph[index % coloresGraph.length]);
+                borderColors.push('white');
+            });
+
+            if(votos["VOTO EN BLANCO"] > 0) { 
+                etiquetas.push("BLANCOS"); datos.push(votos["VOTO EN BLANCO"]); 
+                backgroundColors.push('#ecf0f1'); borderColors.push('white');
+            }
+            if(votos["VOTO NULO"] > 0) { 
+                etiquetas.push("NULOS"); datos.push(votos["VOTO NULO"]); 
+                backgroundColors.push('#7f8c8d'); borderColors.push('white');
+            }
+
+            let maxVotos = Math.max(...datos, 1); 
+            let techoGrafico = Math.ceil(maxVotos * 1.2); 
+
+            const ctx = document.getElementById('miGrafico').getContext('2d');
+            
+            // Si el gráfico ya existe, solo actualizamos los datos para no perder la animación o el tipo
+            // Pero si cambió el número de candidatos, mejor destruir y recrear
+            if (chartInstance) chartInstance.destroy(); 
+
+            chartInstance = new Chart(ctx, {
+                type: tipoGraficoActual, 
+                data: {
+                    labels: etiquetas,
+                    datasets: [{
+                        label: 'Votos',
+                        data: datos,
+                        backgroundColor: backgroundColors, 
+                        borderColor: borderColors, 
+                        borderWidth: 1,
+                        borderRadius: 5 
+                    }]
+                },
+                options: {
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    animation: { duration: 0 }, 
+                    plugins: { 
+                        legend: { display: (tipoGraficoActual === 'doughnut'), labels: { color: 'white' } }, 
+                        tooltip: { titleFont: { size: 16 }, bodyFont: { size: 16 } }
+                    },
+                    scales: {
+                        y: { 
+                            display: (tipoGraficoActual === 'bar'), 
+                            beginAtZero: true,
+                            max: techoGrafico, 
+                            ticks: { color: '#ffffff', font: { size: 14, weight: 'bold' } }, 
+                            grid: { color: 'rgba(255,255,255,0.1)' } 
+                        },
+                        x: { 
+                            display: (tipoGraficoActual === 'bar'),
+                            ticks: { color: '#ffffff', font: { size: 11, weight: 'bold' }, autoSkip: false, maxRotation: 45, minRotation: 45 }, 
+                            grid: { display: false } 
+                        }
+                    }
+                }
+            });
+
+            // Lista Lateral
+            const contenedorLideres = document.getElementById('lista-lideres');
+            contenedorLideres.innerHTML = "";
+            
+            let ranking = [];
+            candidatosActivos.forEach((c, index) => {
+                ranking.push({ 
+                    nombre: c.nombre, 
+                    votos: (votos[c.nombre] || 0), 
+                    foto: c.foto,
+                    colorIndex: index 
+                });
+            });
+            
+            ranking.sort((a, b) => b.votos - a.votos);
+
+            ranking.forEach((item, index) => {
+                let colorBorde = coloresGraph[item.colorIndex % coloresGraph.length];
+                contenedorLideres.innerHTML += `
+                    <div class="leader-card" style="border-left-color: ${colorBorde};">
+                        <div style="font-weight:bold; font-size:1.2em; color:#bbb;">#${index + 1}</div>
+                        <img src="${item.foto}" class="leader-foto">
+                        <div class="leader-info" style="flex-grow:1;">
+                            <h3>${item.nombre}</h3>
+                        </div>
+                        <div class="leader-votes">${item.votos}</div>
+                    </div>
+                `;
+            });
+        }
+
+        // Función Manual para botones (guarda el estado)
+        function cambiarGraficoManual(tipo) {
+            tipoGraficoActual = tipo; 
+            document.querySelectorAll('.btn-viz').forEach(b => b.classList.remove('activo'));
+            if(tipo === 'bar') document.getElementById('btn-bar').classList.add('activo');
+            if(tipo === 'doughnut') document.getElementById('btn-pie').classList.add('activo');
+            actualizarDashboardVisual();
+        }
+
+        /* --- RESTO DE FUNCIONES (NO CAMBIAN) --- */
+        function aplicarMascaraRUT(input) {
+            let valor = input.value.replace(/[^0-9kK]/g, '').toUpperCase();
+            if (valor.length <= 1) { input.value = valor; return; }
+            let dv = valor.slice(-1); 
+            let cuerpo = valor.slice(0, -1).replace(/K/g, '');
+            input.value = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + dv;
+        }
+
+        function notificar(mensaje, tipo = 'exito') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${tipo === 'error' ? 'error' : ''}`;
+            toast.innerText = mensaje;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.add('mostrar'), 100);
+            setTimeout(() => { toast.classList.remove('mostrar'); setTimeout(() => toast.remove(), 400); }, 3000);
+        }
+
+        function abrirModal(id) { document.getElementById(id).classList.add('activo'); }
+        function cerrarModal(id) { document.getElementById(id).classList.remove('activo'); }
+
+        function solicitarConfirmacion(titulo, texto, accion) {
+            document.getElementById('modal-confirm-titulo').innerText = titulo;
+            document.getElementById('modal-confirm-texto').innerText = texto;
+            const btnSi = document.getElementById('btn-modal-si');
+            btnSi.onclick = function() { accion(); cerrarModal('modal-confirm'); };
+            abrirModal('modal-confirm');
+        }
+
+        function abrirModalLogin() {
+            document.getElementById('login-password').value = ""; 
+            abrirModal('modal-login');
+        }
+
+        function agregarCandidatoDesdeBD() {
+            const selector = document.getElementById('selector-bd-candidatos');
+            const idSeleccionado = parseInt(selector.value);
+            if (!idSeleccionado) return notificar("Selecciona a alguien", "error");
+            const candidatoEncontrado = baseDeDatosExcel.find(c => c.id === idSeleccionado);
+            if (candidatosActivos.find(c => c.id === idSeleccionado)) return notificar("Ya está en lista", "error");
+            candidatosActivos.push(candidatoEncontrado);
+            if (!votos[candidatoEncontrado.nombre]) votos[candidatoEncontrado.nombre] = 0;
+            renderizarListaAdmin();
+            notificar("Agregado");
+        }
+
+        function renderizarListaAdmin() {
+            const lista = document.getElementById('lista-admin-candidatos');
+            lista.innerHTML = "";
+            candidatosActivos.forEach((c, index) => {
+                lista.innerHTML += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid #eee;">
+                        <span>${c.nombre}</span>
+                        <button class="btn-eliminar" onclick="eliminarDePapeleta(${index})" title="Quitar candidato">🗑️</button>
+                    </div>
+                `;
+            });
+        }
+
+        function eliminarDePapeleta(index) {
+            candidatosActivos.splice(index, 1);
+            renderizarListaAdmin();
+        }
+
+        function pedirConfirmacionBorrado() {
+            solicitarConfirmacion("¡PELIGRO!", "Se borrará todo. ¿Continuar?", function() {
+                votos = { "VOTO EN BLANCO": 0, "VOTO NULO": 0 };
+                candidatosActivos = [];
+                renderizarListaAdmin();
+                notificar("Historial borrado", "error");
+            });
+        }
+
+        function cambiarTituloVotacion() {
+            const nuevoTitulo = document.getElementById('input-nuevo-titulo').value;
+            if (nuevoTitulo) {
+                tituloVotacion = nuevoTitulo;
+                document.getElementById('titulo-principal-display').innerText = tituloVotacion;
+                document.getElementById('titulo-votacion-display').innerText = "Votando para: " + tituloVotacion;
+                notificar("Título actualizado");
+            }
+        }
+
+        function toggleModoMultiple() {
+            esVotoMultiple = document.getElementById('check-voto-multiple').checked;
+            notificar("Modo de votación cambiado");
+        }
+
+        function iniciarSesion() {
+            const id = document.getElementById('input-id').value;
+            if (id.length < 3) return notificar("RUT Inválido", "error");
+            if (candidatosActivos.length === 0) return notificar("Votación no iniciada", "error");
+            seleccionTemporal = []; 
+            renderizarVotacionUsuario(); 
+            cambiarPantalla('pantalla-votacion');
+            actualizarBotonConfirmar();
+        }
+
+        function renderizarVotacionUsuario() {
+            const contenedor = document.getElementById('contenedor-candidatos-activos');
+            contenedor.innerHTML = ""; 
+            candidatosActivos.forEach(cand => {
+                let cardId = "card-" + cand.nombre.replace(/\s+/g, '-');
+                contenedor.innerHTML += `
+                    <div class="candidato-card" id="${cardId}">
+                        <img src="${cand.foto}" class="candidato-foto">
+                        <div class="info-candidato">${cand.nombre}</div>
+                        <button class="btn-card-accion" onclick="seleccionarCandidato('${cand.nombre}', '${cardId}')">Seleccionar</button>
+                    </div>
+                `;
+            });
+        }
+
+        function seleccionarCandidato(nombre, cardId) {
+            limpiarSeleccionEspecial();
+            const card = document.getElementById(cardId);
+            const boton = card.querySelector('button');
+            if (esVotoMultiple) {
+                const index = seleccionTemporal.indexOf(nombre);
+                if (index === -1) {
+                    seleccionTemporal.push(nombre);
+                    card.classList.add('seleccionado');
+                    boton.innerText = "Quitar";
+                } else {
+                    seleccionTemporal.splice(index, 1);
+                    card.classList.remove('seleccionado');
+                    boton.innerText = "Seleccionar";
+                }
+            } else {
+                document.querySelectorAll('.candidato-card').forEach(d => {
+                    d.classList.remove('seleccionado');
+                    d.querySelector('button').innerText = "Seleccionar";
+                });
+                if (seleccionTemporal.includes(nombre)) {
+                    seleccionTemporal = []; 
+                } else {
+                    seleccionTemporal = [nombre];
+                    card.classList.add('seleccionado');
+                    boton.innerText = "Quitar";
+                }
+            }
+            actualizarBotonConfirmar();
+        }
+
+        function seleccionarEspecial(tipo) {
+            document.querySelectorAll('.candidato-card').forEach(d => {
+                d.classList.remove('seleccionado');
+                d.querySelector('button').innerText = "Seleccionar";
+            });
+            document.getElementById('btn-esp-blanco').style.border = "2px solid #eee";
+            document.getElementById('btn-esp-nulo').style.border = "none";
+            if(seleccionTemporal.includes(tipo)) {
+                seleccionTemporal = [];
+            } else {
+                seleccionTemporal = [tipo];
+                if(tipo.includes("BLANCO")) document.getElementById('btn-esp-blanco').style.border = "3px solid #ffc107";
+                else document.getElementById('btn-esp-nulo').style.border = "3px solid #ffc107";
+            }
+            actualizarBotonConfirmar();
+        }
+
+        function limpiarSeleccionEspecial() {
+            document.getElementById('btn-esp-blanco').style.border = "2px solid #eee";
+            document.getElementById('btn-esp-nulo').style.border = "none";
+            if(seleccionTemporal.some(x => x.includes("VOTO"))) seleccionTemporal = [];
+        }
+
+        function actualizarBotonConfirmar() {
+            const btn = document.getElementById('btn-confirmar-voto');
+            if (seleccionTemporal.length > 0) btn.classList.remove('oculto');
+            else btn.classList.add('oculto');
+        }
+
+        function preConfirmarVoto() {
+            solicitarConfirmacion("Confirmar Voto", "¿Enviar selección definitiva?", confirmarVotacionFinal);
+        }
+
+        function confirmarVotacionFinal() {
+            seleccionTemporal.forEach(nombre => {
+                if (!votos[nombre]) votos[nombre] = 0;
+                votos[nombre]++;
+            });
+            cambiarPantalla('pantalla-gracias');
+        }
+
+        function cerrarSesion() {
+            document.getElementById('input-id').value = "";
+            document.getElementById('contenedor-principal').classList.remove('full-screen');
+            document.body.style.overflow = "auto"; 
+            if(intervaloRefresco) clearInterval(intervaloRefresco);
+            cambiarPantalla('pantalla-login');
+        }
+
+        function cambiarPantalla(id) {
+            document.querySelectorAll('.contenedor > div').forEach(div => div.classList.add('oculto'));
+            document.getElementById(id).classList.remove('oculto');
+        }
+    </script>
+</body>
+</html>
